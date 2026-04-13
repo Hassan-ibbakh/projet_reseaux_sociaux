@@ -4,6 +4,10 @@ import pandas as pd
 import sys
 import os
 from datetime import datetime
+from dotenv import load_dotenv
+
+# Charger les variables d'environnement depuis .env
+load_dotenv()
 
 # Ajouter le chemin pour les imports
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
@@ -11,51 +15,54 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from src.preprocessing import load_and_clean_data
 from src.analysis import calculate_kpis, generate_insights, create_visualizations
 
-# ========== CONFIGURATION GEMINI ==========
-# ========== CONFIGURATION GEMINI OPTIMISÉE ==========
+# ========== CONFIGURATION GEMINI SÉCURISÉE ==========
 try:
     import google.generativeai as genai
     
-    # Clé API
-    GEMINI_API_KEY = "AIzaSyCk7kRGdi6oFCaYH-mV6JUK_8srrnFmITg"
-    genai.configure(api_key=GEMINI_API_KEY)
+    # Clé API depuis .env (SÉCURISÉ - pas en dur dans le code)
+    GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
     
-    # --- TEST DE CONNEXION DYNAMIQUE ---
-    # On cherche quel modèle est disponible pour votre clé
-    available_models = []
-    for m in genai.list_models():
-        if 'generateContent' in m.supported_generation_methods:
-            available_models.append(m.name)
-    
-    # Ordre de préférence des modèles
-    preferences = [
-        'models/gemini-1.5-flash', 
-        'models/gemini-1.5-pro', 
-        'models/gemini-pro'
-    ]
-    
-    selected_model_name = None
-    for pref in preferences:
-        if pref in available_models:
-            selected_model_name = pref
-            break
-            
-    if selected_model_name:
-        model = genai.GenerativeModel(selected_model_name)
-        GEMINI_AVAILABLE = True
+    if not GEMINI_API_KEY:
+        st.error("❌ Clé API Gemini manquante. Créez un fichier .env avec GEMINI_API_KEY=votre_clé")
+        GEMINI_AVAILABLE = False
     else:
-        # Si aucun dans la liste, on prend le premier disponible
-        if available_models:
-            model = genai.GenerativeModel(available_models[0])
-            selected_model_name = available_models[0]
+        genai.configure(api_key=GEMINI_API_KEY)
+        
+        # --- TEST DE CONNEXION DYNAMIQUE ---
+        available_models = []
+        for m in genai.list_models():
+            if 'generateContent' in m.supported_generation_methods:
+                available_models.append(m.name)
+        
+        # Ordre de préférence des modèles
+        preferences = [
+            'models/gemini-1.5-flash', 
+            'models/gemini-1.5-pro', 
+            'models/gemini-pro'
+        ]
+        
+        selected_model_name = None
+        for pref in preferences:
+            if pref in available_models:
+                selected_model_name = pref
+                break
+                
+        if selected_model_name:
+            model = genai.GenerativeModel(selected_model_name)
             GEMINI_AVAILABLE = True
         else:
-            GEMINI_AVAILABLE = False
-            st.error("❌ Aucun modèle compatible trouvé pour cette clé API.")
+            if available_models:
+                model = genai.GenerativeModel(available_models[0])
+                selected_model_name = available_models[0]
+                GEMINI_AVAILABLE = True
+            else:
+                GEMINI_AVAILABLE = False
+                st.error("❌ Aucun modèle compatible trouvé pour cette clé API.")
 
 except Exception as e:
     GEMINI_AVAILABLE = False
     st.error(f"❌ Erreur de configuration Gemini : {e}")
+
 # Configuration Streamlit
 st.set_page_config(
     page_title="Social Media Intelligence - Agence X",
@@ -136,8 +143,8 @@ st.sidebar.markdown("---")
 st.sidebar.markdown("### 🤖 Modèle IA")
 if GEMINI_AVAILABLE:
     st.sidebar.success(f"✅ Connecté")
-    # Affiche le nom du modèle utilisé (utile pour le debug)
-    st.sidebar.caption(f"Utilise : {selected_model_name}") 
+    if 'selected_model_name' in dir():
+        st.sidebar.caption(f"Utilise : {selected_model_name}") 
 else:
     st.sidebar.error("❌ Gemini non disponible")
 st.sidebar.markdown("---")
@@ -151,7 +158,7 @@ st.sidebar.info(
 @st.cache_data
 def load_all_data():
     try:
-        df = load_and_clean_data('data/raw_data.csv')
+        df = load_and_clean_data('data/Viral_Social_Media_Trends.csv')
         kpis, df = calculate_kpis(df)
         insights = generate_insights(df)
         return df, kpis, insights
@@ -256,7 +263,7 @@ if page == "🏠 Dashboard":
                 mime='text/csv',
             )
     else:
-        st.warning("⚠️ Aucune donnée chargée. Vérifiez que 'data/raw_data.csv' existe.")
+        st.warning("⚠️ Aucune donnée chargée. Vérifiez que 'data/Viral_Social_Media_Trends.csv' existe.")
 
 # ================================
 # PAGE 2 : ANALYSE DÉTAILLÉE
@@ -303,9 +310,10 @@ elif page == "🤖 Générateur IA (Gemini)":
         st.error("""
         ### ❌ Gemini API non configurée
         
-        1. Obtenez une clé API gratuite sur https://aistudio.google.com/
-        2. Installez : `pip install google-generativeai`
-        3. Remplacez `GEMINI_API_KEY` par votre clé
+        1. Créez un fichier `.env` à la racine du projet
+        2. Ajoutez : `GEMINI_API_KEY=votre_clé_api`
+        3. Obtenez une clé gratuite sur https://aistudio.google.com/
+        4. Installez : `pip install python-dotenv google-generativeai`
         """)
     
     col1, col2 = st.columns([1, 1])
