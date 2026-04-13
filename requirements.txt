@@ -1,0 +1,22 @@
+# ─── Interface utilisateur ────────────────────────────────────────────────────
+streamlit>=1.28.0
+
+# ─── Data manipulation ────────────────────────────────────────────────────────
+pandas>=2.0.0
+numpy>=1.24.0
+
+# ─── Visualisation ────────────────────────────────────────────────────────────
+matplotlib>=3.7.0
+seaborn>=0.12.0
+
+# ─── Intelligence Artificielle ────────────────────────────────────────────────
+google-generativeai>=0.3.0
+
+# ─── API Flask (endpoint pour n8n) ───────────────────────────────────────────
+flask>=3.0.0
+
+# ─── Automatisation (scheduler) ───────────────────────────────────────────────
+schedule>=1.2.0
+
+# ─── Collecte données Reddit API ──────────────────────────────────────────────
+praw>=7.7.0

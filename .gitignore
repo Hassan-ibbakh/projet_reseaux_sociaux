@@ -1,0 +1,33 @@
+# Environnement Python
+venv/
+env/
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+
+# Fichiers sensibles
+.env
+.secrets
+credentials.json
+token.pickle
+
+# Logs
+logs/
+*.log
+scheduler.log
+
+# Données brutes (trop lourdes ou sensibles)
+data/raw_data.csv
+data/collection_meta.json
+*.csv
+*.json
+
+# IDE
+.vscode/
+.idea/
+*.swp
+.DS_Store
+
+# Docker (optionnel si vous voulez garder les Dockerfile)
+*.pid

@@ -1,0 +1,3 @@
+"Nous avons exploré la prédiction d'engagement comme piste d'amélioration. Cependant, l'engagement dépend de nombreux facteurs non mesurés (timing, tendances, qualité visuelle). La prédiction exacte est complexe et moins pertinente que l'analyse descriptive."
+
+"Notre solution se concentre donc sur ce qui apporte une réelle valeur à l'agence : l'analyse des performances passées et la génération de contenu optimisé par IA."

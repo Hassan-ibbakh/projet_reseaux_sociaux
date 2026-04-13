@@ -1,0 +1,51 @@
+version: "3.8"
+
+services:
+
+  # ─── API Flask (votre pipeline Python) ────────────────────────────────────
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    container_name: agence_x_api
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./data:/app/data
+      - ./reports:/app/reports
+      - ./logs:/app/logs
+      - ./src:/app/src
+    restart: unless-stopped
+
+  # ─── n8n ──────────────────────────────────────────────────────────────────
+  n8n:
+    image: n8nio/n8n:latest
+    container_name: agence_x_n8n
+    network_mode: bridge
+    ports:
+      - "5678:5678"
+
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
+
+    environment:
+      - N8N_BASIC_AUTH_ACTIVE=true
+      - N8N_BASIC_AUTH_USER=admin
+      - N8N_BASIC_AUTH_PASSWORD=adminpassword
+      - N8N_ENABLE_COMMUNITY_NODES=true
+      - WEBHOOK_URL=https://unretrieved-reversibly-taisha.ngrok-free.dev
+      - N8N_HOST=unretrieved-reversibly-taisha.ngrok-free.dev
+      - N8N_PROTOCOL=https
+      # URL de l'API Flask accessible depuis n8n dans Docker
+      - API_BASE_URL=http://host.docker.internal:5000
+
+    volumes:
+      - n8n_data:/home/node/.n8n
+
+    restart: unless-stopped
+    depends_on:
+      - api
+
+volumes:
+  n8n_data:
