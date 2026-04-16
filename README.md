@@ -22,21 +22,34 @@ Concevoir une solution complète intégrant l'ensemble du cycle Data / IA pour a
 projet_reseaux_sociaux/
 │
 ├── data/
-│   └── raw_data.csv              # Dataset Kaggle (5 000 posts)
+│   ├── raw_data.csv                      # Dataset brut
+│   ├── Viral_Social_Media_Trends.csv     # Dataset Kaggle
+│   ├── french_opinions_analyzed.csv      # Données analysées
+│   └── french_opinions_analyzed_opinions.csv
 │
 ├── src/
 │   ├── __init__.py
-│   ├── preprocessing.py          # Nettoyage et préparation des données
-│   ├── analysis.py               # Calcul KPIs, insights, visualisations
-│   ├── features.py               # Features engineering
-│   └── ai_model.py               # Intégration modèle IA
+│   ├── preprocessing.py                  # Nettoyage et préparation
+│   ├── analysis.py                       # Calcul KPIs et insights
+│   ├── features.py                       # Features engineering
 │
-├── logs/                         # Logs générés par le scheduler
-├── reports/                      # Rapports automatiques (JSON + TXT)
+├── sentiment_model/                      # Modèle de sentiment pré-entraîné
+│   ├── config.json
+│   ├── model.safetensors
+│   └── tokenizer.json
 │
-├── app.py                        # Application Streamlit (dashboard)
-├── scheduler.py                  # Workflow d'automatisation
-├── requirements.txt              # Dépendances Python
+├── logs/                                 # Logs d'exécution
+├── reports/                              # Rapports automatiques
+│
+├── app.py                                # Dashboard Streamlit
+├── api.py                                # API FastAPI
+├── collector.py                          # Collecte de données
+├── analyze_sentiment.py                  # Analyse de sentiment
+│
+├── Dockerfile.api                        # Conteneur API
+├── docker-compose.yml                    # Orchestration Docker
+├── requirements.txt                      # Dépendances générales
+├── requirements.api.txt                  # Dépendances API
 └── README.md
 ```
 
@@ -47,7 +60,7 @@ projet_reseaux_sociaux/
 ### 1. Cloner le repository
 
 ```bash
-git clone https://github.com/votre-username/projet_reseaux_sociaux.git
+git clone https://github.com/Hassan-ibbakh/projet_reseaux_sociaux.git
 cd projet_reseaux_sociaux
 ```
 
@@ -66,7 +79,11 @@ source venv/bin/activate
 ### 3. Installer les dépendances
 
 ```bash
+# Installation générale
 pip install -r requirements.txt
+
+# Installation API (optionnel)
+pip install -r requirements.api.txt
 ```
 
 ### 4. Lancer le dashboard Streamlit
@@ -77,28 +94,76 @@ streamlit run app.py
 
 L'application s'ouvre sur `http://localhost:8501`
 
-### 5. Lancer l'automatisation
+### 5. Lancer l'API (FastAPI)
 
 ```bash
-# Exécution unique (test)
-python scheduler.py --run-once
-
-# Mode scheduler continu (toutes les heures + rapport à 08h00)
-python scheduler.py
+uvicorn api:app --reload --port 8000
 ```
+
+L'API est accessible sur `http://localhost:8000`  
+Documentation Swagger : `http://localhost:8000/docs`
+
+### 6. Lancer avec Docker Compose
+
+```bash
+docker-compose up -d
+```
+
+Cela lance l'API dans un conteneur Docker sur le port 8000.
+
+```bash
+# Connecter au réseau Docker (si nécessaire)
+docker network connect projet_reseaux_sociaux_default agence_x_n8n
+
+# Arrêter les services
+docker-compose down
+```
+
+### 7. Analyse de Sentiment
+
+```bash
+python analyze_sentiment.py
+```
+
+Utilise le modèle de sentiment pré-entraîné stocké dans `sentiment_model/`
+
+### 8. Collecte de Données
+
+```bash
+python collector.py
+```
+
+Collecte les données depuis les sources configurées
 
 ---
 
 ## 📦 Dépendances principales
 
 ```
+# Core
 streamlit>=1.28
 pandas>=2.0
 numpy
 matplotlib
 seaborn
+
+# API
+fastapi>=0.104
+uvicorn>=0.24
+pydantic>=2.0
+
+# ML & NLP
+transformers>=4.30
+torch>=2.0
+scikit-learn>=1.3
+
+# IA & APIs
 google-generativeai>=0.3
+
+# Utilities
 schedule
+python-dotenv
+requests
 ```
 
 ---
@@ -117,56 +182,98 @@ schedule
 ## 🔄 Architecture technique
 
 ```
-┌──────────┐    ┌──────────────┐    ┌──────────┐    ┌───────────────┐
-│ COLLECTE │ →  │  NETTOYAGE   │ →  │ ANALYSE  │ →  │      IA       │
-│  CSV /   │    │  pandas      │    │  KPIs /  │    │ Gemini 2.5    │
-│  API     │    │  preprocessing│   │ insights │    │ Flash         │
-└──────────┘    └──────────────┘    └──────────┘    └───────────────┘
-      │                │                  │                  │
-      └────────────────┴──────────────────┴──────────────────┘
-                                   │
-                    ┌──────────────▼──────────────┐
-                    │      INTERFACE STREAMLIT      │
-                    │  Dashboard │ Analyse │ IA     │
-                    │  Insights  │ Export  │ Rapport│
-                    └─────────────────────────────-┘
-                                   │
-                    ┌──────────────▼──────────────┐
-                    │  AUTOMATISATION (scheduler)   │
-                    │  Toutes les heures + 08h00    │
-                    └──────────────────────────────┘
+┌──────────┐    ┌──────────────┐    ┌────────────────┐    ┌─────────────┐
+│ COLLECTE │ →  │  NETTOYAGE   │ →  │    ANALYSE     │ →  │   OUTPUTS   │
+│ CSV/API  │    │  Preprocessing│   │ KPIs/Insights  │    │ Rapports/IA │
+└──────────┘    └──────────────┘    └────────────────┘    └─────────────┘
+      │                │                   │    ▲                │
+      │                │              Sentiment │                │
+      │                │              Analysis  │                │
+      │                │              (Model)   │                │
+      └────────────────┴───────────────────────┴────────────────┘
+                            │
+        ┌───────────────────┼───────────────────┐
+        │                   │                   │
+        ▼                   ▼                   ▼
+   ┌─────────────┐   ┌────────────┐   ┌──────────────┐
+   │ Streamlit   │   │   FastAPI  │   │    Docker    │
+   │  Dashboard  │   │    REST    │   │  Containers  │
+   │  (Port 8501)│   │ (Port 8000)│   │              │
+   └─────────────┘   └────────────┘   └──────────────┘
 ```
+
+### Composants :
+
+1. **Collecte** (`collector.py`) — Récupération des données CSV/API
+2. **Prétraitement** (`src/preprocessing.py`) — Nettoyage et normalisation
+3. **Analyse** (`src/analysis.py`) — Calcul des KPIs et statistiques
+4. **Analyse Sentiment** (`analyze_sentiment.py`) — Classification via modèle transformers
+5. **Features** (`src/features.py`) — Ingénierie des variables
+6. **Interface Dashboard** (`app.py`) — Streamlit pour visualisation
+7. **API REST** (`api.py`) — FastAPI pour accès programmable
+8. **Conteneurisation** (`Dockerfile.api`, `docker-compose.yml`) — Déploiement Docker
 
 ---
 
-## 🤖 Module IA — Google Gemini
+## 🤖 Module IA — Analyse de Sentiment
 
-Le générateur de contenu utilise l'API **Google Gemini 2.5 Flash** pour produire des posts optimisés selon :
+### Modèle de Sentiment
+Le projet intègre un **modèle de sentiment pré-entraîné** basé sur les transformers (HuggingFace) pour :
 
+- Classification du sentiment (positif, négatif, neutre)
+- Scoring de confiance
+- Analyse multi-langues (français inclus)
+- Extraction d'opinions détaillées
+
+**Fichiers du modèle :**
+- `sentiment_model/config.json` — Configuration du modèle
+- `sentiment_model/model.safetensors` — Poids du modèle
+- `sentiment_model/tokenizer.json` — Tokenizer associé
+
+**Utilisation :**
+```bash
+python analyze_sentiment.py
+```
+
+Résultats stockés dans `data/french_opinions_analyzed.csv`
+
+### Génération de Contenu (Gemini)
+Optionnellement, le projet peut utiliser l'API **Google Gemini 2.5 Flash** pour générer du contenu optimisé selon :
 - La plateforme cible (Instagram, LinkedIn, TikTok…)
 - Le ton souhaité (professionnel, humoristique, inspirant…)
 - L'objectif marketing (notoriété, engagement, conversion…)
-- La longueur et les options (hashtags, CTA)
 
-> La clé API est à renseigner dans `app.py` (`GEMINI_API_KEY`).  
-> Obtenez une clé gratuite sur https://aistudio.google.com/
+> Pour activer cette fonctionnalité, ajoutez votre clé API Gemini dans les variables d'environnement.
 
 ---
 
-## ⚙️ Automatisation — `scheduler.py`
+## 🔌 API REST — FastAPI
 
-Le pipeline automatisé s'exécute selon le schéma suivant :
+L'API REST (`api.py`) expose les fonctionnalités principales :
 
-| Étape | Action | Fréquence |
-|-------|--------|-----------|
-| 1. Collecte | Récupération des données (API ou fichier) | Toutes les heures |
-| 2. Nettoyage | Preprocessing automatique | Toutes les heures |
-| 3. Analyse | Calcul KPIs + insights | Toutes les heures |
-| 4. Rapport | Export JSON + TXT horodaté | Toutes les heures |
-| Rapport matinal | Synthèse quotidienne | 08h00 chaque jour |
+### Endpoints disponibles
 
-Les rapports sont archivés dans `reports/` avec horodatage.  
-Les logs sont disponibles dans `logs/scheduler.log`.
+```
+[GET]  /                          # Health check
+[GET]  /docs                      # Swagger UI
+[POST] /analyze                   # Analyser un texte
+[GET]  /kpis                      # Récupérer les KPIs
+[GET]  /reports                   # Lister les rapports
+[POST] /sentiment                 # Analyse de sentiment
+[GET]  /data/platform/{platform}  # Données par plateforme
+```
+
+### Lancement
+
+```bash
+# Développement
+uvicorn api:app --reload --port 8000
+
+# Production
+uvicorn api:app --host 0.0.0.0 --port 8000
+```
+
+Documentation interactive : http://localhost:8000/docs
 
 ---
 
@@ -195,4 +302,6 @@ Les logs sont disponibles dans `logs/scheduler.log`.
 
 ## 👤 Auteur
 
-Projet réalisé dans le cadre d'un exercice technique pour le poste **Data / AI** — Agence X.
+**Hassan Ibbakh**
+
+[GitHub — Hassan-ibbakh/projet_reseaux_sociaux](https://github.com/Hassan-ibbakh/projet_reseaux_sociaux)

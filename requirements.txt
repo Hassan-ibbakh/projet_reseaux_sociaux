@@ -11,9 +11,20 @@ seaborn>=0.12.0
 
 # ─── Intelligence Artificielle ────────────────────────────────────────────────
 google-generativeai>=0.3.0
+groq>=0.4.0                    # Pour Groq API (Llama 3.3)
+
+# ─── Machine Learning / BERT ──────────────────────────────────────────────────
+torch>=2.0.0
+transformers>=4.30.0
+torchvision>=0.15.0
+
+# ─── Traitement du langage ────────────────────────────────────────────────────
+langdetect>=1.0.9              # Détection de langue (français)
+nltk>=3.8.0
 
 # ─── API Flask (endpoint pour n8n) ───────────────────────────────────────────
 flask>=3.0.0
+requests>=2.31.0
 
 # ─── Automatisation (scheduler) ───────────────────────────────────────────────
 schedule>=1.2.0
@@ -21,6 +32,11 @@ schedule>=1.2.0
 # ─── Collecte données Reddit API ──────────────────────────────────────────────
 praw>=7.7.0
 
+# ─── Variables d'environnement ────────────────────────────────────────────────
+python-dotenv>=1.0.0
 
+# ─── Machine Learning scikit-learn ────────────────────────────────────────────
+scikit-learn>=1.3.0
 
-python-dotenv
+# ─── Utilitaires ──────────────────────────────────────────────────────────────
+tqdm>=4.66.0                   # Barres de progression

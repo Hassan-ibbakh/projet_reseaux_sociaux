@@ -15,37 +15,42 @@ services:
       - ./reports:/app/reports
       - ./logs:/app/logs
       - ./src:/app/src
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
+    networks:
+      - agence_network
     restart: unless-stopped
 
   # ─── n8n ──────────────────────────────────────────────────────────────────
   n8n:
     image: n8nio/n8n:latest
     container_name: agence_x_n8n
-    network_mode: bridge
     ports:
       - "5678:5678"
-
     dns:
       - 8.8.8.8
       - 1.1.1.1
-
     environment:
       - N8N_BASIC_AUTH_ACTIVE=true
       - N8N_BASIC_AUTH_USER=admin
       - N8N_BASIC_AUTH_PASSWORD=adminpassword
       - N8N_ENABLE_COMMUNITY_NODES=true
-      - WEBHOOK_URL=https://unretrieved-reversibly-taisha.ngrok-free.dev
-      - N8N_HOST=unretrieved-reversibly-taisha.ngrok-free.dev
-      - N8N_PROTOCOL=https
-      # URL de l'API Flask accessible depuis n8n dans Docker
-      - API_BASE_URL=http://host.docker.internal:5000
-
+      - WEBHOOK_URL=http://localhost:5678/
+      - N8N_HOST=localhost
+      - N8N_PROTOCOL=http
+      - API_BASE_URL=http://api:5000
     volumes:
       - n8n_data:/home/node/.n8n
-
+    networks:
+      - agence_network
     restart: unless-stopped
     depends_on:
       - api
+
+networks:
+  agence_network:
+    driver: bridge
 
 volumes:
   n8n_data:

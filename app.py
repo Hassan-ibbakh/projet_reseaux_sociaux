@@ -5,6 +5,7 @@ import sys
 import os
 from datetime import datetime
 from dotenv import load_dotenv
+import matplotlib.pyplot as plt
 
 # Charger les variables d'environnement depuis .env
 load_dotenv()
@@ -15,11 +16,10 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from src.preprocessing import load_and_clean_data
 from src.analysis import calculate_kpis, generate_insights, create_visualizations
 
-# ========== CONFIGURATION GEMINI SÉCURISÉE ==========
+# ========== CONFIGURATION GEMINI ==========
 try:
     import google.generativeai as genai
     
-    # Clé API depuis .env (SÉCURISÉ - pas en dur dans le code)
     GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
     
     if not GEMINI_API_KEY:
@@ -28,13 +28,11 @@ try:
     else:
         genai.configure(api_key=GEMINI_API_KEY)
         
-        # --- TEST DE CONNEXION DYNAMIQUE ---
         available_models = []
         for m in genai.list_models():
             if 'generateContent' in m.supported_generation_methods:
                 available_models.append(m.name)
         
-        # Ordre de préférence des modèles
         preferences = [
             'models/gemini-1.5-flash', 
             'models/gemini-1.5-pro', 
@@ -63,6 +61,25 @@ except Exception as e:
     GEMINI_AVAILABLE = False
     st.error(f"❌ Erreur de configuration Gemini : {e}")
 
+# ========== CONFIGURATION GROQ ==========
+try:
+    from groq import Groq
+    
+    GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+    
+    if GROQ_API_KEY:
+        groq_client = Groq(api_key=GROQ_API_KEY)
+        GROQ_AVAILABLE = True
+    else:
+        GROQ_AVAILABLE = False
+        st.info("💡 Astuce : Ajoutez GROQ_API_KEY dans .env pour des recommandations IA avancées")
+except ImportError:
+    GROQ_AVAILABLE = False
+    st.info("💡 Pour des recommandations IA, installez : pip install groq")
+except Exception as e:
+    GROQ_AVAILABLE = False
+    st.warning(f"⚠️ Groq non disponible : {e}")
+
 # Configuration Streamlit
 st.set_page_config(
     page_title="Social Media Intelligence - Agence X",
@@ -85,12 +102,6 @@ st.markdown("""
         color: #666;
         margin-bottom: 2rem;
         font-size: 1rem;
-    }
-    .kpi-card {
-        background-color: #f0f2f6;
-        padding: 1rem;
-        border-radius: 10px;
-        text-align: center;
     }
     .insight-card {
         background-color: #e8f4f8;
@@ -122,12 +133,18 @@ st.markdown("""
         font-size: 1.8rem;
         font-weight: bold;
     }
+    .recommendation-card {
+        background-color: #f9f9f9;
+        padding: 1rem;
+        border-radius: 10px;
+        margin: 0.5rem 0;
+    }
 </style>
 """, unsafe_allow_html=True)
 
 # En-tête
-st.markdown("<h1 class='main-header'>📱 Social Media Intelligence Dashboard</h1>", unsafe_allow_html=True)
-st.markdown("<p class='sub-header'>Agence X - Performance, Engagement & IA Générative (Gemini)</p>", unsafe_allow_html=True)
+st.markdown("<h1 class='main-header'> Social Media Intelligence Dashboard</h1>", unsafe_allow_html=True)
+st.markdown("<p class='sub-header'>Agence X - Performance, Engagement & IA Générative (Gemini + Groq)</p>", unsafe_allow_html=True)
 
 # Sidebar
 st.sidebar.title("📌 Navigation")
@@ -135,23 +152,28 @@ page = st.sidebar.radio("Aller à :", [
     "🏠 Dashboard", 
     "📈 Analyse Détaillée", 
     "🤖 Générateur IA (Gemini)", 
-    "📋 Insights Business"
+    "📋 Insights Business",
+    "💬 Analyse de Sentiment"
 ])
 
-# Statut Gemini dans la sidebar
+# Statut des IA dans la sidebar
 st.sidebar.markdown("---")
-st.sidebar.markdown("### 🤖 Modèle IA")
+st.sidebar.markdown("### 🤖 Modèles IA")
 if GEMINI_AVAILABLE:
-    st.sidebar.success(f"✅ Connecté")
-    if 'selected_model_name' in dir():
-        st.sidebar.caption(f"Utilise : {selected_model_name}") 
+    st.sidebar.success("✅ Gemini connecté")
 else:
     st.sidebar.error("❌ Gemini non disponible")
+
+if GROQ_AVAILABLE:
+    st.sidebar.success("✅ Groq connecté")
+else:
+    st.sidebar.info("⚡ Groq optionnel")
+
 st.sidebar.markdown("---")
 st.sidebar.markdown("### 📊 À propos")
 st.sidebar.info(
     "Cette application analyse les performances des réseaux sociaux "
-    "et utilise **Gemini (Google)** pour générer du contenu optimisé."
+    "et utilise **Gemini** pour générer du contenu et **Groq** pour des recommandations avancées."
 )
 
 # Chargement des données
@@ -209,6 +231,114 @@ Génère UNIQUEMENT le contenu du post, sans explications supplémentaires.
         return response.text, None
     except Exception as e:
         return None, str(e)
+
+# ========== FONCTION GROQ POUR RECOMMANDATIONS ==========
+def generate_recommendations_with_groq(kpis, insights):
+    """Génère des recommandations professionnelles avec Groq"""
+    
+    if not GROQ_AVAILABLE:
+        return None, None
+    
+    prompt = f"""
+Tu es un expert en stratégie social media pour une agence de communication.
+
+Voici les données analysées à partir de {kpis.get('total_posts', 0)} posts :
+
+KPIS :
+- Total posts analysés : {kpis.get('total_posts', 0)}
+- Engagement total : {kpis.get('total_engagement', 0):,}
+- Engagement moyen par post : {kpis.get('avg_engagement', 0):.0f}
+- Meilleure plateforme : {kpis.get('best_platform', 'N/A')}
+- Plateforme moins performante : {kpis.get('worst_platform', 'N/A')}
+- Meilleur type de contenu : {kpis.get('best_content_type', 'N/A')}
+
+INSIGHTS GÉNÉRÉS :
+{chr(10).join(['- ' + i for i in insights])}
+
+Génère un rapport de recommandations professionnelles, structuré en :
+- 3 points "À FAIRE" (actions concrètes basées sur les données)
+- 2 points "À ÉVITER" (erreurs à ne pas commettre)
+
+Sois précis, actionnable, et basé uniquement sur les données fournies. Utilise des émojis pertinents.
+"""
+    
+    try:
+        response = groq_client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[
+                {"role": "system", "content": "Tu es un expert en stratégie social media. Réponds de manière professionnelle et concise."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.5,
+            max_tokens=600
+        )
+        
+        recommendations_text = response.choices[0].message.content
+        
+        # Parser la réponse
+        faire = []
+        eviter = []
+        current_section = None
+        
+        for line in recommendations_text.split('\n'):
+            line = line.strip()
+            if 'À FAIRE' in line.upper() or 'A FAIRE' in line.upper():
+                current_section = 'faire'
+            elif 'À ÉVITER' in line.upper() or 'A EVITER' in line.upper():
+                current_section = 'eviter'
+            elif line.startswith('-') or line.startswith('•') or (line and line[0].isdigit() and '.' in line[:3]):
+                clean_line = line.lstrip('-•0123456789. ')
+                if current_section == 'faire' and clean_line:
+                    faire.append(clean_line)
+                elif current_section == 'eviter' and clean_line:
+                    eviter.append(clean_line)
+        
+        if not faire and not eviter:
+            all_lines = [l for l in recommendations_text.split('\n') if l.strip() and not l.strip().startswith('**')]
+            faire = all_lines[:3] if len(all_lines) >= 3 else all_lines[:2]
+            eviter = all_lines[-2:] if len(all_lines) >= 5 else all_lines[-1:]
+        
+        return faire, eviter
+        
+    except Exception as e:
+        st.error(f"❌ Erreur Groq : {e}")
+        return None, None
+
+# ========== FONCTIONS POUR ANALYSE DE SENTIMENT ==========
+@st.cache_data
+def load_sentiment_data():
+    """Charge les données analysées par le modèle BERT"""
+    paths_to_try = [
+        "data/french_opinions_analyzed.csv",  # NOUVEAU - Posts français analysés
+        "data/raw_data_analyzed.csv",         # Ancien - Posts Reddit analysés
+        "data/analyzed_data.csv",             # Ancien - Fallback
+        "data/french_opinions_analyzed.json"
+    ]
+    
+    for path in paths_to_try:
+        if os.path.exists(path):
+            if path.endswith('.csv'):
+                df = pd.read_csv(path)
+            else:
+                df = pd.read_json(path)
+            
+            if 'sentiment' in df.columns:
+                return df, path
+    
+    return None, None
+
+def get_sentiment_stats(df):
+    """Calcule les statistiques de sentiment"""
+    total = len(df)
+    stats = {}
+    for sentiment in ['positive', 'neutral', 'negative']:
+        count = len(df[df['sentiment'] == sentiment])
+        stats[sentiment] = {
+            'count': count,
+            'percentage': (count / total * 100) if total > 0 else 0
+        }
+    stats['total'] = total
+    return stats
 
 # ================================
 # PAGE 1 : DASHBOARD
@@ -313,49 +443,22 @@ elif page == "🤖 Générateur IA (Gemini)":
         1. Créez un fichier `.env` à la racine du projet
         2. Ajoutez : `GEMINI_API_KEY=votre_clé_api`
         3. Obtenez une clé gratuite sur https://aistudio.google.com/
-        4. Installez : `pip install python-dotenv google-generativeai`
         """)
     
     col1, col2 = st.columns([1, 1])
     
     with col1:
         st.subheader("🎨 Paramètres du post")
-        
-        platform = st.selectbox(
-            "📱 Plateforme cible",
-            ["Instagram", "Facebook", "Twitter", "LinkedIn", "TikTok", "YouTube"],
-            help="Choisissez la plateforme pour laquelle générer le contenu"
-        )
-        
-        topic = st.text_input(
-            "✏️ Sujet du post",
-            value="Découvrez nos services de communication",
-            help="Entrez le thème principal de votre post"
-        )
-        
-        tone = st.selectbox(
-            "🎭 Ton du message",
-            ["Professionnel", "Décontracté", "Urgent", "Inspirant", "Humoristique", "Émotionnel"],
-            help="Le style d'écriture du post"
-        )
-        
-        objective = st.selectbox(
-            "🎯 Objectif du post",
-            ["Notoriété", "Engagement", "Conversion", "Information", "Viral"],
-            help="L'objectif marketing du post"
-        )
+        platform = st.selectbox("📱 Plateforme cible", ["Instagram", "Facebook", "Twitter", "LinkedIn", "TikTok", "YouTube"])
+        topic = st.text_input("✏️ Sujet du post", value="Découvrez nos services de communication")
+        tone = st.selectbox("🎭 Ton du message", ["Professionnel", "Décontracté", "Urgent", "Inspirant", "Humoristique", "Émotionnel"])
+        objective = st.selectbox("🎯 Objectif du post", ["Notoriété", "Engagement", "Conversion", "Information", "Viral"])
     
     with col2:
         st.subheader("⚙️ Options avancées")
-        
         include_hashtags = st.toggle("#️⃣ Ajouter des hashtags", value=True)
         include_cta = st.toggle("🔘 Ajouter un appel à l'action (CTA)", value=True)
-        
-        post_length = st.select_slider(
-            "📏 Longueur du post",
-            options=["Court", "Moyen", "Long"],
-            value="Moyen"
-        )
+        post_length = st.select_slider("📏 Longueur du post", options=["Court", "Moyen", "Long"], value="Moyen")
         
         st.markdown("---")
         st.markdown("💡 **Inspiration depuis vos données**")
@@ -363,59 +466,32 @@ elif page == "🤖 Générateur IA (Gemini)":
         if not df.empty and 'total_engagement' in df.columns:
             best_post = df.nlargest(1, 'total_engagement')
             if 'content' in best_post.columns:
-                best_content = str(best_post['content'].values[0])[:200]
                 best_engagement = best_post['total_engagement'].values[0]
                 st.info(f"🏆 Le post le plus performant a généré **{best_engagement:,}** engagements.")
-                with st.expander("📖 Voir le post original"):
-                    st.write(best_content)
     
     st.markdown("---")
     
     if st.button("🚀 Générer le post avec Gemini", type="primary", use_container_width=True):
         with st.spinner("🧠 Gemini analyse et génère votre contenu..."):
-            
-            # Préparer le contexte depuis les données
             context = ""
             if not df.empty and 'total_engagement' in df.columns:
                 top_post = df.nlargest(1, 'total_engagement')
                 if 'content' in top_post.columns:
-                    context = f"""
-                    INSPIRATION (post qui a bien fonctionné dans vos données) :
-                    "{top_post['content'].values[0][:300]}"
-                    """
+                    context = f'INSPIRATION : "{top_post["content"].values[0][:300]}"'
             
-            # Génération
             generated_post, error = generate_with_gemini(
-                platform=platform,
-                topic=topic,
-                tone=tone,
-                objective=objective,
-                include_hashtags=include_hashtags,
-                include_cta=include_cta,
-                post_length=post_length,
-                context_data=context
+                platform, topic, tone, objective,
+                include_hashtags, include_cta, post_length, context
             )
             
             if error:
                 st.error(f"❌ {error}")
             else:
                 st.success("✅ Post généré avec succès par Gemini !")
-                
                 st.markdown("---")
                 st.subheader("📝 Votre post généré par IA :")
-                
-                st.markdown(f"""
-                <div class='generated-post'>
-                    <b>📱 {platform}</b> | <b>🎭 {tone}</b> | <b>🎯 {objective}</b><br>
-                    <hr style='margin: 10px 0;'>
-                    {generated_post.replace(chr(10), '<br>')}
-                </div>
-                """, unsafe_allow_html=True)
-                
-                # Code pour copier
+                st.markdown(f"<div class='generated-post'>{generated_post.replace(chr(10), '<br>')}</div>", unsafe_allow_html=True)
                 st.code(generated_post, language="markdown")
-                
-                # Bouton de téléchargement
                 st.download_button(
                     label="💾 Télécharger le post (TXT)",
                     data=generated_post,
@@ -424,7 +500,7 @@ elif page == "🤖 Générateur IA (Gemini)":
                 )
 
 # ================================
-# PAGE 4 : INSIGHTS BUSINESS
+# PAGE 4 : INSIGHTS BUSINESS AVEC GROQ
 # ================================
 elif page == "📋 Insights Business":
     st.header("💡 Insights et recommandations stratégiques")
@@ -432,58 +508,60 @@ elif page == "📋 Insights Business":
     if insights:
         st.subheader("🎯 Insights générés par l'analyse des données")
         for insight in insights:
-            st.markdown(f"""
-            <div class='insight-card'>
-                {insight}
-            </div>
-            """, unsafe_allow_html=True)
+            st.markdown(f"<div class='insight-card'>{insight}</div>", unsafe_allow_html=True)
     else:
         st.warning("⚠️ Aucun insight disponible")
     
-    st.subheader("📋 Recommandations pour l'agence")
+    st.subheader("🤖 Recommandations IA (Groq)")
     
-    col1, col2 = st.columns(2)
+    if st.button("📊 Générer des recommandations personnalisées avec IA", type="primary"):
+        with st.spinner("🤖 L'IA analyse vos données et génère des recommandations..."):
+            faire, eviter = generate_recommendations_with_groq(kpis, insights)
+            
+            if faire and eviter:
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.markdown("### ✅ À FAIRE")
+                    for rec in faire:
+                        st.markdown(f"- {rec}")
+                with col2:
+                    st.markdown("### ❌ À ÉVITER")
+                    for rec in eviter:
+                        st.markdown(f"- {rec}")
+            else:
+                st.warning("⚠️ Mode démo - Recommandations génériques")
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.markdown("### ✅ À FAIRE")
+                    st.markdown("- 📱 Publier sur la plateforme la plus performante")
+                    st.markdown("- #️⃣ Utiliser 3 à 5 hashtags par post")
+                    st.markdown("- ⏰ Poster entre 18h et 20h en semaine")
+                with col2:
+                    st.markdown("### ❌ À ÉVITER")
+                    st.markdown("- 📝 Posts trop longs (>300 caractères)")
+                    st.markdown("- 🔢 Trop de hashtags (>10)")
+                    st.markdown("- 🚫 Publier sans appel à l'action")
+    else:
+        st.info("💡 Cliquez sur le bouton ci-dessus pour générer des recommandations personnalisées basées sur vos données.")
     
-    with col1:
-        st.markdown("""
-        ### ✅ À FAIRE
-        - 📱 Publier sur la plateforme la plus performante
-        - #️⃣ Utiliser 3 à 5 hashtags par post
-        - ⏰ Poster entre 18h et 20h en semaine
-        - 💬 Répondre aux commentaires sous 1h
-        - 📊 Analyser les performances chaque semaine
-        """)
-    
-    with col2:
-        st.markdown("""
-        ### ❌ À ÉVITER
-        - 📝 Posts trop longs (>300 caractères)
-        - 🔢 Trop de hashtags (>10)
-        - 🚫 Publier sans appel à l'action
-        - 🙈 Ignorer les commentaires négatifs
-        - 📋 Copier-coller le même contenu partout
-        """)
-    
-    # Export du rapport
     st.markdown("---")
     st.subheader("📄 Export du rapport d'analyse")
     
     if st.button("📊 Générer le rapport complet", type="secondary"):
         report_text = f"""
-        RAPPORT D'ANALYSE SOCIAL MEDIA
-        ================================
-        Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
-        
-        KPIS PRINCIPAUX:
-        - Total posts: {kpis.get('total_posts', 0)}
-        - Engagement total: {kpis.get('total_engagement', 0):,}
-        - Engagement moyen: {kpis.get('avg_engagement', 0):.0f}
-        - Meilleure plateforme: {kpis.get('best_platform', 'N/A')}
-        
-        INSIGHTS:
-        {chr(10).join(['- ' + i for i in insights])}
-        """
-        
+RAPPORT D'ANALYSE SOCIAL MEDIA
+================================
+Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+
+KPIS PRINCIPAUX:
+- Total posts: {kpis.get('total_posts', 0)}
+- Engagement total: {kpis.get('total_engagement', 0):,}
+- Engagement moyen: {kpis.get('avg_engagement', 0):.0f}
+- Meilleure plateforme: {kpis.get('best_platform', 'N/A')}
+
+INSIGHTS:
+{chr(10).join(['- ' + i for i in insights])}
+"""
         st.download_button(
             label="📥 Télécharger le rapport (TXT)",
             data=report_text,
@@ -491,11 +569,207 @@ elif page == "📋 Insights Business":
             mime="text/plain",
         )
 
+# ================================
+# ================================
+# PAGE 5 : ANALYSE DE SENTIMENT (AVIS FRANÇAIS)
+# ================================
+elif page == "💬 Analyse de Sentiment":
+    st.header("💬 Analyse de Sentiment avec CamemBERT")
+    
+    st.markdown("""
+    <div style='background-color:#e8f4f8; padding:15px; border-radius:10px; margin-bottom:20px;'>
+    <b>🤖 Modèle CamemBERT (BERT français)</b><br>
+    Ce modèle analyse automatiquement le sentiment des textes en français avec une précision de <b>95.71%</b>.<br>
+    Les données analysées proviennent des posts Reddit collectés et filtrés en français.
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # Charger les données de sentiment
+    sentiment_df, source_path = load_sentiment_data()
+    
+    if sentiment_df is not None:
+        st.caption(f"📁 Source des données : `{source_path}`")
+        
+        # ========== STATISTIQUES GLOBALES ==========
+        st.subheader("📊 Statistiques globales")
+        
+        stats = get_sentiment_stats(sentiment_df)
+        
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            st.metric("📝 Total posts français", f"{stats['total']:,}")
+        with col2:
+            st.metric("😊 Positifs", f"{stats['positive']['count']:,}", 
+                     delta=f"{stats['positive']['percentage']:.1f}%")
+        with col3:
+            st.metric("😐 Neutres", f"{stats['neutral']['count']:,}",
+                     delta=f"{stats['neutral']['percentage']:.1f}%")
+        with col4:
+            st.metric("😞 Négatifs", f"{stats['negative']['count']:,}",
+                     delta=f"{stats['negative']['percentage']:.1f}%", delta_color="inverse")
+        
+        st.markdown("---")
+        
+        # ========== VISUALISATIONS ==========
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.subheader("📊 Distribution des sentiments")
+            
+            fig, ax = plt.subplots(figsize=(8, 5))
+            sentiments = ['positive', 'neutral', 'negative']
+            counts = [stats[s]['count'] for s in sentiments]
+            colors = ['#2ecc71', '#f39c12', '#e74c3c']
+            labels = ['😊 Positif', '😐 Neutre', '😞 Négatif']
+            
+            bars = ax.bar(labels, counts, color=colors, edgecolor='black', linewidth=1.5)
+            ax.set_title('Nombre de posts par sentiment', fontsize=14, fontweight='bold')
+            ax.set_ylabel('Nombre de posts')
+            ax.set_ylim(0, max(counts) * 1.1)
+            
+            for bar, count in zip(bars, counts):
+                ax.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 5,
+                       str(count), ha='center', va='bottom', fontweight='bold')
+            
+            st.pyplot(fig)
+        
+        with col2:
+            st.subheader("🥧 Proportion des sentiments")
+            
+            fig2, ax2 = plt.subplots(figsize=(8, 5))
+            ax2.pie(counts, labels=labels, autopct='%1.1f%%', colors=colors,
+                   explode=[0.05, 0.05, 0.05], shadow=True, textprops={'fontsize': 12})
+            ax2.set_title('Répartition des sentiments', fontsize=14, fontweight='bold')
+            st.pyplot(fig2)
+        
+        # ========== AVIS PERTINENTS (BONUS) ==========
+        st.markdown("---")
+        st.subheader("💬 Avis pertinents (≥ 10 likes)")
+        
+        # Filtrer les avis avec assez d'engagement
+        opinions_df = sentiment_df[sentiment_df['likes'] >= 10].copy()
+        
+        if not opinions_df.empty:
+            tab1, tab2, tab3 = st.tabs(["👍 Avis Positifs", "😐 Avis Neutres", "👎 Avis Négatifs"])
+            
+            with tab1:
+                positive_opinions = opinions_df[opinions_df['sentiment'] == 'positive'].head(10)
+                if not positive_opinions.empty:
+                    for _, row in positive_opinions.iterrows():
+                        content = str(row['content'])[:150]
+                        st.markdown(f"""
+                        <div style='background-color:#e8f8e8; padding:10px; border-radius:8px; margin:8px 0; border-left:4px solid #2ecc71;'>
+                            <b>💬 {content}...</b><br>
+                            <small>👍 {row['likes']} likes | 💬 {row['comments']} commentaires | 📁 r/{row.get('subreddit', '?')}</small>
+                        </div>
+                        """, unsafe_allow_html=True)
+                else:
+                    st.info("Aucun avis positif avec ≥ 10 likes")
+            
+            with tab2:
+                neutral_opinions = opinions_df[opinions_df['sentiment'] == 'neutral'].head(10)
+                if not neutral_opinions.empty:
+                    for _, row in neutral_opinions.iterrows():
+                        content = str(row['content'])[:150]
+                        st.markdown(f"""
+                        <div style='background-color:#fff8e8; padding:10px; border-radius:8px; margin:8px 0; border-left:4px solid #f39c12;'>
+                            <b>💬 {content}...</b><br>
+                            <small>👍 {row['likes']} likes | 💬 {row['comments']} commentaires | 📁 r/{row.get('subreddit', '?')}</small>
+                        </div>
+                        """, unsafe_allow_html=True)
+                else:
+                    st.info("Aucun avis neutre avec ≥ 10 likes")
+            
+            with tab3:
+                negative_opinions = opinions_df[opinions_df['sentiment'] == 'negative'].head(10)
+                if not negative_opinions.empty:
+                    for _, row in negative_opinions.iterrows():
+                        content = str(row['content'])[:150]
+                        st.markdown(f"""
+                        <div style='background-color:#ffe8e8; padding:10px; border-radius:8px; margin:8px 0; border-left:4px solid #e74c3c;'>
+                            <b>💬 {content}...</b><br>
+                            <small>👍 {row['likes']} likes | 💬 {row['comments']} commentaires | 📁 r/{row.get('subreddit', '?')}</small>
+                        </div>
+                        """, unsafe_allow_html=True)
+                else:
+                    st.info("Aucun avis négatif avec ≥ 10 likes")
+        else:
+            st.info("ℹ️ Aucun avis avec au moins 10 likes trouvé")
+        
+        # ========== TABLEAU DES POSTS PAR SENTIMENT ==========
+        st.markdown("---")
+        st.subheader("📋 Tous les posts analysés")
+        
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            selected_sentiment = st.selectbox(
+                "Filtrer par sentiment",
+                ["Tous", "positive", "neutral", "negative"],
+                format_func=lambda x: {"Tous": "📊 Tous", "positive": "😊 Positifs", 
+                                       "neutral": "😐 Neutres", "negative": "😞 Négatifs"}.get(x, x)
+            )
+        
+        with col2:
+            sort_options = [col for col in ['likes', 'comments', 'upvote_ratio'] if col in sentiment_df.columns]
+            sort_by = st.selectbox("Trier par", sort_options if sort_options else ["likes"])
+        
+        if selected_sentiment != "Tous":
+            filtered_df = sentiment_df[sentiment_df['sentiment'] == selected_sentiment]
+        else:
+            filtered_df = sentiment_df
+        
+        filtered_df = filtered_df.sort_values(sort_by, ascending=False)
+        
+        display_cols = ['content', 'sentiment', 'likes', 'comments']
+        if 'upvote_ratio' in filtered_df.columns:
+            display_cols.append('upvote_ratio')
+        if 'subreddit' in filtered_df.columns:
+            display_cols.append('subreddit')
+        
+        st.dataframe(filtered_df[display_cols].head(50), use_container_width=True)
+        
+        # ========== EXPORT ==========
+        st.markdown("---")
+        st.subheader("📄 Export des données")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            csv_data = sentiment_df.to_csv(index=False).encode('utf-8')
+            st.download_button(
+                label="📥 Télécharger toutes les données (CSV)",
+                data=csv_data,
+                file_name=f"sentiment_analysis_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                mime="text/csv",
+            )
+        
+        with col2:
+            if not opinions_df.empty:
+                csv_opinions = opinions_df.to_csv(index=False).encode('utf-8')
+                st.download_button(
+                    label="📥 Télécharger les avis pertinents (CSV)",
+                    data=csv_opinions,
+                    file_name=f"french_opinions_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                    mime="text/csv",
+                )
+    
+    else:
+        # Pas de données disponibles
+        st.warning("⚠️ Aucune donnée d'analyse de sentiment disponible.")
+        
+        st.info("""
+        ### Pour analyser les sentiments des posts Reddit français :
+        
+        1. Assurez-vous que le modèle BERT est présent dans `./sentiment_model/`
+        2. Lancez la collecte et l'analyse :
+        ```bash
+        python analyze_sentiment.py --limit 100 """)
+
 # Pied de page
 st.markdown("---")
 st.markdown(
     "<p style='text-align: center; color: #666; font-size: 12px;'>"
-    "© 2025 Agence X - Social Media Intelligence | Propulsé par Google Gemini AI"
+    "© 2025 Agence X - Social Media Intelligence | Propulsé par Google Gemini & Groq AI"
     "</p>",
     unsafe_allow_html=True
 )
