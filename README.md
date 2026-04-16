@@ -37,6 +37,10 @@ projet_reseaux_sociaux/
 │   ├── config.json
 │   ├── model.safetensors
 │   └── tokenizer.json
+│── notebooks/                    
+│   ├── réseaux_sociaux.ipynb     # Analyse performances réseaux sociaux
+│   ├── sentimant_bert.ipynb      # Entraînement CamemBERT
+│
 │
 ├── logs/                                 # Logs d'exécution
 ├── reports/                              # Rapports automatiques
